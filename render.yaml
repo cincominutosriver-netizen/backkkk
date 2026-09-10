@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: eventin-api
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: NODE_ENV
+        value: production
