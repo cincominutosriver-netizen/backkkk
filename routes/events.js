@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Event = require('../models/Event');
+const { buildLocationQuery } = require('../utils/locationSearch');
 const Contact = require('../models/Contact');
 const Owner = require('../models/Owner');
 const OwnerClaim = require('../models/OwnerClaim');
@@ -512,8 +513,7 @@ router.get('/search', async (req, res) => {
         query.type = { $in: types };
       }
     }
-    if (province) query['location.province'] = new RegExp(province, 'i');
-    if (city) query['location.city'] = new RegExp(city, 'i');
+    Object.assign(query, buildLocationQuery({ city, province }));
     if (q) {
       const keyword = String(q).trim();
       if (keyword) {
