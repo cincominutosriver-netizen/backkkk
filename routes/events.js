@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Event = require('../models/Event');
-const { buildLocationQuery } = require('../utils/locationSearch');
+const { buildLocationQuery, buildNameAndDistrictQuery } = require('../utils/locationSearch');
 const Contact = require('../models/Contact');
 const Owner = require('../models/Owner');
 const OwnerClaim = require('../models/OwnerClaim');
@@ -485,11 +485,33 @@ const setNoStoreHeaders = (res) => {
 };
 
 // GET - Búsqueda y filtros (DEBE IR PRIMERO)
+router.get('/districts', async (req, res) => {
+  const city = String(req.query.city || '').trim();
+  if (!city) return res.json({ districts: [] });
+  try {
+    const values = await Event.distinct('location.district', {
+      ...APPROVED_QUERY,
+      ...buildLocationQuery({ city, province: req.query.province })
+    });
+    const names = new Map();
+    for (const value of values) {
+      if (typeof value !== 'string' || !value.trim()) continue;
+      const name = value.trim();
+      const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+      if (!names.has(key)) names.set(key, name);
+    }
+    return res.json({ districts: [...names.values()].sort((a, b) => a.localeCompare(b, 'es')) });
+  } catch (error) {
+    return res.status(500).json({ message: 'No se pudieron obtener los barrios' });
+  }
+});
+
 router.get('/search', async (req, res) => {
   try {
     const { 
       type, 
       q,
+      district,
       province, 
       city, 
       minCapacity, 
@@ -514,19 +536,10 @@ router.get('/search', async (req, res) => {
       }
     }
     Object.assign(query, buildLocationQuery({ city, province }));
-    if (q) {
-      const keyword = String(q).trim();
-      if (keyword) {
-        const safeKeyword = escapeRegex(keyword);
-        query.$or = [
-          { name: new RegExp(safeKeyword, 'i') },
-          { 'location.address': new RegExp(safeKeyword, 'i') },
-          { 'location.city': new RegExp(safeKeyword, 'i') },
-          { 'location.province': new RegExp(safeKeyword, 'i') },
-          { type: new RegExp(safeKeyword, 'i') }
-        ];
-      }
+    if (String(district || '').trim() && !String(city || '').trim()) {
+      return res.status(400).json({ message: 'Elegí una ciudad para filtrar por barrio' });
     }
+    Object.assign(query, buildNameAndDistrictQuery({ q, district }));
     
     if (minCapacity || maxCapacity) {
       query['capacity.max'] = {};
