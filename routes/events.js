@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Event = require('../models/Event');
-const { buildLocationQuery, buildNameAndDistrictQuery } = require('../utils/locationSearch');
+const { buildLocationQuery, buildNameQuery } = require('../utils/locationSearch');
 const Contact = require('../models/Contact');
 const Owner = require('../models/Owner');
 const OwnerClaim = require('../models/OwnerClaim');
@@ -329,7 +329,8 @@ const PUBLIC_EVENT_LITE_SELECT = [
   'location.province',
   'location.city',
   'location.district',
-  'location.coordinates'
+  'location.coordinates',
+  'media.photos'
 ].join(' ');
 const PUBLIC_EVENT_PAGE_SELECT = [
   '_id',
@@ -485,33 +486,11 @@ const setNoStoreHeaders = (res) => {
 };
 
 // GET - Búsqueda y filtros (DEBE IR PRIMERO)
-router.get('/districts', async (req, res) => {
-  const city = String(req.query.city || '').trim();
-  if (!city) return res.json({ districts: [] });
-  try {
-    const values = await Event.distinct('location.district', {
-      ...APPROVED_QUERY,
-      ...buildLocationQuery({ city, province: req.query.province })
-    });
-    const names = new Map();
-    for (const value of values) {
-      if (typeof value !== 'string' || !value.trim()) continue;
-      const name = value.trim();
-      const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
-      if (!names.has(key)) names.set(key, name);
-    }
-    return res.json({ districts: [...names.values()].sort((a, b) => a.localeCompare(b, 'es')) });
-  } catch (error) {
-    return res.status(500).json({ message: 'No se pudieron obtener los barrios' });
-  }
-});
-
 router.get('/search', async (req, res) => {
   try {
     const { 
       type, 
       q,
-      district,
       province, 
       city, 
       minCapacity, 
@@ -521,7 +500,7 @@ router.get('/search', async (req, res) => {
       featured 
     } = req.query;
     
-    let query = { ...APPROVED_QUERY };
+    const query = { $and: [APPROVED_QUERY] };
     
     if (type) {
       const types = String(type)
@@ -536,10 +515,7 @@ router.get('/search', async (req, res) => {
       }
     }
     Object.assign(query, buildLocationQuery({ city, province }));
-    if (String(district || '').trim() && !String(city || '').trim()) {
-      return res.status(400).json({ message: 'Elegí una ciudad para filtrar por barrio' });
-    }
-    Object.assign(query, buildNameAndDistrictQuery({ q, district }));
+    Object.assign(query, buildNameQuery({ q }));
     
     if (minCapacity || maxCapacity) {
       query['capacity.max'] = {};
@@ -1172,7 +1148,7 @@ router.get('/', async (req, res) => {
 
     if (view === 'lite') {
       setCacheHeaders(res);
-      query = query.select(PUBLIC_EVENT_LITE_SELECT).lean();
+      query = query.select(PUBLIC_EVENT_LITE_SELECT).slice('media.photos', 1).lean();
     }
 
     const events = await query;
@@ -1592,4 +1568,3 @@ router.get('/:id/media', async (req, res) => {
 });
 
 module.exports = router;
-

@@ -31,11 +31,10 @@ function buildLocationQuery({ city, province } = {}) {
   return query;
 }
 
-function buildNameAndDistrictQuery({ q, district } = {}) {
+function buildNameQuery({ q } = {}) {
   const query = {};
   if (normalize(q)) query.name = exactNames([q], true);
-  if (normalize(district)) query['location.district'] = exactNames([district]);
   return query;
 }
 
-module.exports = { buildLocationQuery, buildNameAndDistrictQuery };
+module.exports = { buildLocationQuery, buildNameQuery };
